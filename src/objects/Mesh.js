@@ -1,4 +1,5 @@
 import { Vector3 } from '../math/Vector3.js';
+import { Vector4 } from '../math/Vector4.js';
 import { Vector2 } from '../math/Vector2.js';
 import { Sphere } from '../math/Sphere.js';
 import { Ray } from '../math/Ray.js';
@@ -8,6 +9,7 @@ import { Triangle } from '../math/Triangle.js';
 import { BackSide, FrontSide } from '../constants.js';
 import { MeshBasicMaterial } from '../materials/MeshBasicMaterial.js';
 import { BufferGeometry } from '../core/BufferGeometry.js';
+import {Float32BufferAttribute, Uint8BufferAttribute} from '../core/BufferAttribute.js';
 
 const _inverseMatrix = /*@__PURE__*/ new Matrix4();
 const _ray = /*@__PURE__*/ new Ray();
@@ -18,11 +20,17 @@ const _vA = /*@__PURE__*/ new Vector3();
 const _vB = /*@__PURE__*/ new Vector3();
 const _vC = /*@__PURE__*/ new Vector3();
 
+const _vAP = /*@__PURE__*/ new Vector2();
+const _vBP = /*@__PURE__*/ new Vector2();
+const _vCP = /*@__PURE__*/ new Vector2();
+
 const _tempA = /*@__PURE__*/ new Vector3();
 const _morphA = /*@__PURE__*/ new Vector3();
 
 const _intersectionPoint = /*@__PURE__*/ new Vector3();
 const _intersectionPointWorld = /*@__PURE__*/ new Vector3();
+
+const _triangleAreas = new Array(4);
 
 /**
  * Class representing triangular polygon mesh based objects.
@@ -208,6 +216,17 @@ class Mesh extends Object3D {
 
 	}
 
+	getProjectedVertexPosition( index, target ) {
+
+		const geometry = this.geometry;
+		const position = geometry.attributes.cameraProjectedPositions;
+
+		target.fromBufferAttribute( position, index );
+
+		return target;
+
+	}
+
 	/**
 	 * Computes intersection points between a casted ray and this line.
 	 *
@@ -258,6 +277,45 @@ class Mesh extends Object3D {
 
 		this._computeIntersections( raycaster, intersects, _ray );
 
+	}
+
+	calculateCameraProjection( camera, canvasHeight, canvasWidth ) {
+
+		const geometry = this.geometry;
+		const worldMatrix = this.matrixWorld;
+		const viewMatrix = camera.matrixWorldInverse;
+		const projectionMatrix = camera.projectionMatrix;
+
+		const position = geometry.attributes.position;
+
+		const vector = new Vector4();
+
+		const cameraProjectionPositions = new Float32Array( position.count * 2);
+
+		for ( let i = 0; i < position.count; i++ ) {
+
+			const x = position.getX( i );
+			const y = position.getY( i );
+			const z = position.getZ( i );
+
+			vector.set( x, y, z, 1 );
+
+			vector.applyMatrix4( worldMatrix );
+			vector.applyMatrix4( viewMatrix );
+			vector.applyMatrix4( projectionMatrix );
+
+			vector.x /= vector.w;
+			vector.y /= vector.w;
+			vector.z /= vector.w;
+
+			const screenX = (vector.x + 1) * 0.5 * canvasWidth;
+			const screenY = (1 - vector.y) * 0.5 * canvasHeight;
+
+			cameraProjectionPositions[ i * 2 ] = screenX;
+			cameraProjectionPositions[ i * 2 + 1 ] = screenY;
+		}
+
+		geometry.setAttribute("cameraProjectedPositions", new Float32BufferAttribute(cameraProjectionPositions, 2));
 	}
 
 	_computeIntersections( raycaster, intersects, rayLocalSpace ) {
@@ -313,14 +371,14 @@ class Mesh extends Object3D {
 
 				const start = Math.max( 0, drawRange.start );
 				const end = Math.min( index.count, ( drawRange.start + drawRange.count ) );
-
+				const vertices = new Array(3);
 				for ( let i = start, il = end; i < il; i += 3 ) {
 
-					const a = index.getX( i );
-					const b = index.getX( i + 1 );
-					const c = index.getX( i + 2 );
+					vertices[0] = index.getX( i );
+					vertices[1] = index.getX( i + 1 );
+					vertices[2] = index.getX( i + 2 );
 
-					intersection = checkGeometryIntersection( this, material, raycaster, rayLocalSpace, uv, uv1, normal, a, b, c );
+					intersection = checkGeometryIntersection( this, material, raycaster, rayLocalSpace, uv, uv1, normal, vertices[0], vertices[1], vertices[2] );
 
 					if ( intersection ) {
 
@@ -333,7 +391,8 @@ class Mesh extends Object3D {
 
 			}
 
-		} else if ( position !== undefined ) {
+		} else if ( position !== undefined )
+		{
 
 			// non-indexed buffer geometry
 
@@ -392,7 +451,6 @@ class Mesh extends Object3D {
 			}
 
 		}
-
 	}
 
 }
@@ -428,7 +486,26 @@ function checkIntersection( object, material, raycaster, ray, pA, pB, pC, point 
 
 }
 
+function isPointInTriangle(point, a, b, c) {
+
+	_triangleAreas[0] = 0.5 * Math.abs(a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+
+	_triangleAreas[1] = 0.5 * Math.abs(point.x * (a.y - b.y) + a.x * (b.y - point.y) + b.x * (point.y - a.y));
+	_triangleAreas[2] = 0.5 * Math.abs(point.x * (b.y - c.y) + b.x * (c.y - point.y) + c.x * (point.y - b.y));
+	_triangleAreas[3] = 0.5 * Math.abs(point.x * (c.y - a.y) + c.x * (a.y - point.y) + a.x * (point.y - c.y));
+
+	return _triangleAreas[0] === (_triangleAreas[1] + _triangleAreas[2] + _triangleAreas[3]);
+}
+
 function checkGeometryIntersection( object, material, raycaster, ray, uv, uv1, normal, a, b, c ) {
+
+	object.getProjectedVertexPosition(a, _vAP);
+	object.getProjectedVertexPosition(b, _vBP);
+	object.getProjectedVertexPosition(c, _vCP);
+
+	if (!isPointInTriangle(raycaster.screenPoint, _vAP, _vBP, _vCP)) {
+		return null;
+	}
 
 	object.getVertexPosition( a, _vA );
 	object.getVertexPosition( b, _vB );
@@ -477,7 +554,6 @@ function checkGeometryIntersection( object, material, raycaster, ray, uv, uv1, n
 
 		intersection.face = face;
 		intersection.barycoord = barycoord;
-
 	}
 
 	return intersection;
