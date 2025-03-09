@@ -1,7 +1,6 @@
 import { Matrix4 } from '../math/Matrix4.js';
 import { Ray } from '../math/Ray.js';
 import { Layers } from './Layers.js';
-import {Vector2} from "../math/Vector2.js";
 
 const _matrix = /*@__PURE__*/ new Matrix4();
 
@@ -19,9 +18,8 @@ class Raycaster {
 	 * @param {Vector3} direction - The (normalized) direction vector that gives direction to the ray.
 	 * @param {number} [near=0] - All results returned are further away than near. Near can't be negative.
 	 * @param {number} [far=Infinity] - All results returned are closer than far. Far can't be lower than near.
-	 * @param {Vector2} [screenPoint=null] - Original screen point before any modifications
 	 */
-	constructor( origin, direction, near = 0, far = Infinity, screenPoint = null) {
+	constructor( origin, direction, near = 0, far = Infinity) {
 
 		/**
 		 * The ray used for raycasting.
@@ -55,8 +53,6 @@ class Raycaster {
 		 * @default null
 		 */
 		this.camera = null;
-
-		this.screenPoint = screenPoint;
 
 		/**
 		 * Allows to selectively ignore 3D objects when performing intersection tests.
@@ -118,11 +114,8 @@ class Raycaster {
 	 * @param {Vector2} coords - 2D coordinates of the mouse, in normalized device coordinates (NDC).
 	 * X and Y components should be between `-1` and `1`.
 	 * @param {Camera} camera - The camera from which the ray should originate.
-	 * @param screenPoint - screen coordinates of the pointer
 	 */
-	setFromCamera( coords, camera, screenPoint = null ) {
-
-		this.screenPoint = screenPoint;
+	setFromCamera( coords, camera ) {
 
 		if ( camera.isPerspectiveCamera ) {
 

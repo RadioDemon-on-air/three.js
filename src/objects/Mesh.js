@@ -1,29 +1,21 @@
-import {Vector3} from '../math/Vector3.js';
-import {Vector4} from '../math/Vector4.js';
-import {Vector2} from '../math/Vector2.js';
-import {Sphere} from '../math/Sphere.js';
-import {Ray} from '../math/Ray.js';
-import {Matrix4} from '../math/Matrix4.js';
-import {Object3D} from '../core/Object3D.js';
-import {Triangle} from '../math/Triangle.js';
+import { Vector3 } from '../math/Vector3.js';
+import { Vector2 } from '../math/Vector2.js';
+import { Sphere } from '../math/Sphere.js';
+import { Ray } from '../math/Ray.js';
+import { Matrix4 } from '../math/Matrix4.js';
+import { Object3D } from '../core/Object3D.js';
+import { Triangle } from '../math/Triangle.js';
 import { BVH } from '../math/BVH.js';
-import {BackSide, FrontSide} from '../constants.js';
-import {MeshBasicMaterial} from '../materials/MeshBasicMaterial.js';
-import {BufferGeometry} from '../core/BufferGeometry.js';
-import {Float32BufferAttribute} from '../core/BufferAttribute.js';
+import { BackSide, FrontSide } from '../constants.js';
+import { MeshBasicMaterial } from '../materials/MeshBasicMaterial.js';
+import { BufferGeometry } from '../core/BufferGeometry.js';
 
 const _inverseMatrix = /*@__PURE__*/ new Matrix4();
 const _ray = /*@__PURE__*/ new Ray();
-const _sphere = /*@__PURE__*/ new Sphere();
-const _sphereHitAt = /*@__PURE__*/ new Vector3();
 
 const _vA = /*@__PURE__*/ new Vector3();
 const _vB = /*@__PURE__*/ new Vector3();
 const _vC = /*@__PURE__*/ new Vector3();
-
-const _vAP = /*@__PURE__*/ new Vector2();
-const _vBP = /*@__PURE__*/ new Vector2();
-const _vCP = /*@__PURE__*/ new Vector2();
 
 const _tempA = /*@__PURE__*/ new Vector3();
 const _morphA = /*@__PURE__*/ new Vector3();
@@ -357,6 +349,7 @@ function checkGeometryIntersection( object, material, raycaster, ray, uv, uv1, n
 
 		intersection.face = face;
 		intersection.barycoord = barycoord;
+
 	}
 
 	return intersection;
