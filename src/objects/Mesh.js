@@ -5,14 +5,13 @@ import { Ray } from '../math/Ray.js';
 import { Matrix4 } from '../math/Matrix4.js';
 import { Object3D } from '../core/Object3D.js';
 import { Triangle } from '../math/Triangle.js';
+import { BVH } from '../math/BVH.js';
 import { BackSide, FrontSide } from '../constants.js';
 import { MeshBasicMaterial } from '../materials/MeshBasicMaterial.js';
 import { BufferGeometry } from '../core/BufferGeometry.js';
 
 const _inverseMatrix = /*@__PURE__*/ new Matrix4();
 const _ray = /*@__PURE__*/ new Ray();
-const _sphere = /*@__PURE__*/ new Sphere();
-const _sphereHitAt = /*@__PURE__*/ new Vector3();
 
 const _vA = /*@__PURE__*/ new Vector3();
 const _vB = /*@__PURE__*/ new Vector3();
@@ -94,6 +93,8 @@ class Mesh extends Object3D {
 		 */
 		this.morphTargetInfluences = undefined;
 
+		this.bvh = undefined;
+
 		this.updateMorphTargets();
 
 	}
@@ -116,6 +117,8 @@ class Mesh extends Object3D {
 
 		this.material = Array.isArray( source.material ) ? source.material.slice() : source.material;
 		this.geometry = source.geometry;
+
+		this.bvh = source.bvh;
 
 		return this;
 
@@ -208,6 +211,12 @@ class Mesh extends Object3D {
 
 	}
 
+	buildBHV() {
+
+		const geometry = this.geometry;
+		this.bvh = new BVH( geometry.attributes.position, geometry.index );
+	}
+
 	/**
 	 * Computes intersection points between a casted ray and this line.
 	 *
@@ -216,48 +225,15 @@ class Mesh extends Object3D {
 	 */
 	raycast( raycaster, intersects ) {
 
-		const geometry = this.geometry;
 		const material = this.material;
 		const matrixWorld = this.matrixWorld;
 
 		if ( material === undefined ) return;
 
-		// test with bounding sphere in world space
-
-		if ( geometry.boundingSphere === null ) geometry.computeBoundingSphere();
-
-		_sphere.copy( geometry.boundingSphere );
-		_sphere.applyMatrix4( matrixWorld );
-
-		// check distance from ray origin to bounding sphere
-
-		_ray.copy( raycaster.ray ).recast( raycaster.near );
-
-		if ( _sphere.containsPoint( _ray.origin ) === false ) {
-
-			if ( _ray.intersectSphere( _sphere, _sphereHitAt ) === null ) return;
-
-			if ( _ray.origin.distanceToSquared( _sphereHitAt ) > ( raycaster.far - raycaster.near ) ** 2 ) return;
-
-		}
-
-		// convert ray to local space of mesh
-
 		_inverseMatrix.copy( matrixWorld ).invert();
 		_ray.copy( raycaster.ray ).applyMatrix4( _inverseMatrix );
 
-		// test with bounding box in local space
-
-		if ( geometry.boundingBox !== null ) {
-
-			if ( _ray.intersectsBox( geometry.boundingBox ) === false ) return;
-
-		}
-
-		// test for intersections with geometry
-
 		this._computeIntersections( raycaster, intersects, _ray );
-
 	}
 
 	_computeIntersections( raycaster, intersects, rayLocalSpace ) {
@@ -267,134 +243,30 @@ class Mesh extends Object3D {
 		const geometry = this.geometry;
 		const material = this.material;
 
-		const index = geometry.index;
-		const position = geometry.attributes.position;
 		const uv = geometry.attributes.uv;
 		const uv1 = geometry.attributes.uv1;
 		const normal = geometry.attributes.normal;
-		const groups = geometry.groups;
-		const drawRange = geometry.drawRange;
 
-		if ( index !== null ) {
+		let triangleIntersections = [];
+		this.bvh.rayIntersect( rayLocalSpace, triangleIntersections );
 
-			// indexed buffer geometry
+		for ( let i = 0; i < triangleIntersections.length; i++ ) {
 
-			if ( Array.isArray( material ) ) {
+			const triangle = triangleIntersections[i];
 
-				for ( let i = 0, il = groups.length; i < il; i ++ ) {
+			intersection = checkGeometryIntersection( this, material, raycaster, rayLocalSpace,	uv, uv1,
+				normal, triangle.indices[0], triangle.indices[1], triangle.indices[2] );
 
-					const group = groups[ i ];
-					const groupMaterial = material[ group.materialIndex ];
-
-					const start = Math.max( group.start, drawRange.start );
-					const end = Math.min( index.count, Math.min( ( group.start + group.count ), ( drawRange.start + drawRange.count ) ) );
-
-					for ( let j = start, jl = end; j < jl; j += 3 ) {
-
-						const a = index.getX( j );
-						const b = index.getX( j + 1 );
-						const c = index.getX( j + 2 );
-
-						intersection = checkGeometryIntersection( this, groupMaterial, raycaster, rayLocalSpace, uv, uv1, normal, a, b, c );
-
-						if ( intersection ) {
-
-							intersection.faceIndex = Math.floor( j / 3 ); // triangle number in indexed buffer semantics
-							intersection.face.materialIndex = group.materialIndex;
-							intersects.push( intersection );
-
-						}
-
-					}
-
-				}
-
-			} else {
-
-				const start = Math.max( 0, drawRange.start );
-				const end = Math.min( index.count, ( drawRange.start + drawRange.count ) );
-
-				for ( let i = start, il = end; i < il; i += 3 ) {
-
-					const a = index.getX( i );
-					const b = index.getX( i + 1 );
-					const c = index.getX( i + 2 );
-
-					intersection = checkGeometryIntersection( this, material, raycaster, rayLocalSpace, uv, uv1, normal, a, b, c );
-
-					if ( intersection ) {
-
-						intersection.faceIndex = Math.floor( i / 3 ); // triangle number in indexed buffer semantics
-						intersects.push( intersection );
-
-					}
-
-				}
-
+			if (!intersection) {
+				continue;
 			}
 
-		} else if ( position !== undefined ) {
+			// triangle number in indexed buffer semantics
+			intersection.faceIndex = Math.floor( triangle.faceIndex / 3 );
 
-			// non-indexed buffer geometry
-
-			if ( Array.isArray( material ) ) {
-
-				for ( let i = 0, il = groups.length; i < il; i ++ ) {
-
-					const group = groups[ i ];
-					const groupMaterial = material[ group.materialIndex ];
-
-					const start = Math.max( group.start, drawRange.start );
-					const end = Math.min( position.count, Math.min( ( group.start + group.count ), ( drawRange.start + drawRange.count ) ) );
-
-					for ( let j = start, jl = end; j < jl; j += 3 ) {
-
-						const a = j;
-						const b = j + 1;
-						const c = j + 2;
-
-						intersection = checkGeometryIntersection( this, groupMaterial, raycaster, rayLocalSpace, uv, uv1, normal, a, b, c );
-
-						if ( intersection ) {
-
-							intersection.faceIndex = Math.floor( j / 3 ); // triangle number in non-indexed buffer semantics
-							intersection.face.materialIndex = group.materialIndex;
-							intersects.push( intersection );
-
-						}
-
-					}
-
-				}
-
-			} else {
-
-				const start = Math.max( 0, drawRange.start );
-				const end = Math.min( position.count, ( drawRange.start + drawRange.count ) );
-
-				for ( let i = start, il = end; i < il; i += 3 ) {
-
-					const a = i;
-					const b = i + 1;
-					const c = i + 2;
-
-					intersection = checkGeometryIntersection( this, material, raycaster, rayLocalSpace, uv, uv1, normal, a, b, c );
-
-					if ( intersection ) {
-
-						intersection.faceIndex = Math.floor( i / 3 ); // triangle number in non-indexed buffer semantics
-						intersects.push( intersection );
-
-					}
-
-				}
-
-			}
-
+			intersects.push( intersection );
 		}
-
 	}
-
 }
 
 function checkIntersection( object, material, raycaster, ray, pA, pB, pC, point ) {

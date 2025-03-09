@@ -103,6 +103,8 @@
 				texture.colorSpace = THREE.SRGBColorSpace;
 
 				mesh = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial( { map: texture } ) );
+				mesh.buildBHV();
+
 				scene.add( mesh );
 
 				const geometryHelper = new THREE.ConeGeometry( 20, 100, 3 );
