@@ -19,7 +19,7 @@ class Raycaster {
 	 * @param {number} [near=0] - All results returned are further away than near. Near can't be negative.
 	 * @param {number} [far=Infinity] - All results returned are closer than far. Far can't be lower than near.
 	 */
-	constructor( origin, direction, near = 0, far = Infinity) {
+	constructor( origin, direction, near = 0, far = Infinity ) {
 
 		/**
 		 * The ray used for raycasting.
