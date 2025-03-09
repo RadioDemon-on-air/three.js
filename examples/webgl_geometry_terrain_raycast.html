@@ -44,8 +44,6 @@
 
 			let mesh, texture;
 
-			let cameraDirty = true;
-
 			const worldWidth = 256, worldDepth = 256,
 				worldHalfWidth = worldWidth / 2, worldHalfDepth = worldDepth / 2;
 
@@ -76,10 +74,6 @@
 				controls.minDistance = 1000;
 				controls.maxDistance = 10000;
 				controls.maxPolarAngle = Math.PI / 2;
-
-				controls.addEventListener('end', () => {
-					cameraDirty = true;
-				});
 				//
 
 				const data = generateHeight( worldWidth, worldDepth );
@@ -108,6 +102,8 @@
 				texture.colorSpace = THREE.SRGBColorSpace;
 
 				mesh = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial( { map: texture } ) );
+				mesh.buildBHV();
+
 				scene.add( mesh );
 
 				const geometryHelper = new THREE.ConeGeometry( 20, 100, 3 );
@@ -133,7 +129,6 @@
 				camera.updateProjectionMatrix();
 
 				renderer.setSize( window.innerWidth, window.innerHeight );
-				cameraDirty = true;
 			}
 
 			function generateHeight( width, height ) {
@@ -251,11 +246,6 @@
 				pointer.x = ( event.clientX / canvasWidth ) * 2 - 1;
 				pointer.y = - ( event.clientY / canvasHeight ) * 2 + 1;
 				raycaster.setFromCamera( pointer, camera, new THREE.Vector2( event.clientX, event.clientY ) );
-
-				if (cameraDirty) {
-					mesh.calculateCameraProjection( camera, canvasHeight, canvasWidth );
-					cameraDirty = false;
-				}
 
 				// See if the ray from the camera into the world hits one of our meshes
 				const intersects = raycaster.intersectObject( mesh );

@@ -219,6 +219,12 @@ class Mesh extends Object3D {
 
 	}
 
+	buildBHV() {
+
+		const geometry = this.geometry;
+		this.bvh = new BVH( geometry.attributes.position, geometry.index );
+	}
+
 	/**
 	 * Computes intersection points between a casted ray and this line.
 	 *
@@ -227,16 +233,10 @@ class Mesh extends Object3D {
 	 */
 	raycast( raycaster, intersects ) {
 
-		const geometry = this.geometry;
 		const material = this.material;
 		const matrixWorld = this.matrixWorld;
 
 		if ( material === undefined ) return;
-
-		if (this.bvh === undefined) {
-
-			this.bvh = new BVH( geometry.attributes.position, geometry.index );
-		}
 
 		_inverseMatrix.copy( matrixWorld ).invert();
 		_ray.copy( raycaster.ray ).applyMatrix4( _inverseMatrix );
